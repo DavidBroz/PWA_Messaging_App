@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>PWA messaging app</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+  </head>
+  <body>
+  <div class="container-fluid p-5 bg-primary text-white text-center">
+    <h1><%= data.user.name %></h1> 
+  </div>
+  
+<div class="container mt-5">
+  <div class="row">
+    <div class="col-sm-4">
+      <h3>Chat rooms</h3>
+
+    <div class="list-group">
+
+      <% for(var i=0; i < data.user.rooms.length; i++) { %>
+            <a href="/user/<%= data.user._id %>/get-room/<%= data.user.rooms[i].roomId %>" class="list-group-item list-group-item-action
+              <% if (data.user.currentRoomId===data.user.rooms[i].roomId) { %>
+              active
+             <% } %>">
+              <%= data.allRoomNames[i]%>
+            </a>
+      <% } %>
+    </div>
+
+    </div>
+    <div class="col-sm-4">
+      <h3>Chat</h3>
+      <form id="messageForm">
+        <div class="form-group">
+          <div class="d-flex justify-content-center">
+            <input type="text" class="form-control" id="userMessage" placeholder="Write your message here." autocomplete="off">
+            <button type="submit" id="sendButton" class="btn btn-primary">Send</button>  
+          </div>
+          
+          <input type="hidden" id="userId" value="<%= data.user._id %>">
+          <input type="hidden" id="roomId" value="<%= data.currentRoom._id %>">
+        </div>        
+      </form>
+      <div class="d-flex flex-column-reverse" id="chatDiv">
+        <% for(var i=0; i < data.currentRoom.messages.length; i++) { %>
+            <p><b><%= data.messageUserNames[i] %>:</b> <%= data.currentRoom.messages[i].message %></p>
+        <% } %>  
+      </div>
+    </div>
+    <div class="col-sm-4">
+    <h3>Add new chat room</h3>
+    <div class="d-flex flex-column" align="center">
+      <form id="addNewChatRoomForm">
+        <div class="form-group">
+          <div class="d-flex justify-content-center">
+            <input type="text" class="form-control" id="chatRoomName" placeholder="Write chat room name here." autocomplete="off">
+            <button type="submit" id="createChatRoomButton" class="btn btn-primary">Create</button>           
+          </div>
+        <h5 align="left">Users in the chat room</h5>
+          <div class="d-flex flex-column">
+            
+            <select form="addNewChatRoomForm" id="userSelect" class="select" multiple="multiple" size='15' data-toggle="tooltip" data-placement="bottom" title="Ctrl+click to select multiple">
+              <% for(var i=0; i < data.allUsers.length; i++) { %>
+              <option value="<%=data.allUsers[i]._id %>"><%=data.allUsers[i].name %></option>
+            <% } %>
+            </select>
+          </div>
+        </div>        
+      </form>
+    </div>
+    </div>
+  </div>
+</div>
+
+  <script src="<%=data.uri %><%=data.SOCKET_PORT %>/socket.io/socket.io.js"></script>
+	 <script>
+      const socket = io('<%=data.uri %><%=data.SOCKET_PORT %>');
+      const sendButton = document.getElementById("sendButton");
+      const userMessage = document.getElementById("userMessage");
+      const userId = document.getElementById("userId");
+      const roomId = document.getElementById("roomId");
+      const form = document.getElementById("messageForm");
+      const chatDiv = document.getElementById("chatDiv");
+
+
+      const chatRoomName = document.getElementById("chatRoomName");
+      const addNewChatRoomForm = document.getElementById("addNewChatRoomForm");
+      const userSelect = document.getElementById("userSelect");
+      
+      socket.on('new-room-added', (usersInRoom)=>{
+        if(usersInRoom.includes(userId.value)){
+          location.reload(); //TO DO: najdi lepší řešení  
+        }
+      }); 
+
+      socket.on('message-recieved', (eventRoomId, name, message) => {
+        console.log("Some message arrived");
+        if(eventRoomId==roomId.value)
+          {
+            console.log("Its in my room");
+            let nameElement = document.createElement("b");
+            const namenode = document.createTextNode(name+": ");
+            nameElement.appendChild(namenode);
+
+            let messageElement = document.createElement("p");
+            messageElement.appendChild(nameElement);
+            const textnode = document.createTextNode(message);
+            messageElement.appendChild(textnode);
+            chatDiv.appendChild(messageElement);
+            //location.reload(); //TO DO: najdi lepší řešení
+          }
+          
+      }); 
+
+      addNewChatRoomForm.addEventListener("submit", e => {
+        e.preventDefault();
+
+        var selectedUsers = [];
+        for (var option of userSelect.options)
+        {
+          console.log(option);
+          if (option.selected) {
+            selectedUsers.push(option.value);
+          }
+        }
+        const roomName = chatRoomName.value;
+
+        const data = {
+          "roomName": roomName,
+          "userIds": selectedUsers};
+        console.log(data);
+        chatRoomName = "";
+        fetch('/rooms/add-room', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+          });
+      });
+      
+
+      form.addEventListener("submit", e => {
+        e.preventDefault();
+        const message = userMessage.value;
+        if(message.length == 0)return;
+        userMessage.value = "";
+        const sender = userId.value;
+        const room = roomId.value;
+        
+        socket.emit("messange-sent", sender, room, message);        
+  });
+    </script>
+  </body>
+</html>
